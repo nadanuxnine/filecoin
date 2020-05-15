@@ -558,11 +558,18 @@ func (mp *MessagePool) Remove(from address.Address, nonce uint64) {
 }
 
 func (mp *MessagePool) Pending() ([]*types.SignedMessage, *types.TipSet) {
+	start := time.Now()
+	defer func() {
+		log.Infof("mpool pending took: %s", time.Since(start))
+	}()
 	mp.curTsLk.Lock()
 	defer mp.curTsLk.Unlock()
 
+	log.Infof("getting curts lock took: %s", time.Since(start))
+
 	mp.lk.Lock()
 	defer mp.lk.Unlock()
+	log.Infof("getting mp lock took: %s", time.Since(start))
 
 	out := make([]*types.SignedMessage, 0)
 	for a := range mp.pending {
@@ -592,8 +599,10 @@ func (mp *MessagePool) pendingFor(a address.Address) []*types.SignedMessage {
 }
 
 func (mp *MessagePool) HeadChange(revert []*types.TipSet, apply []*types.TipSet) error {
+	start := time.Now()
 	mp.curTsLk.Lock()
 	defer mp.curTsLk.Unlock()
+	log.Infof("head change func took %s to acquire curTsLk", time.Since(start))
 
 	rmsgs := make(map[address.Address]map[uint64]*types.SignedMessage)
 	add := func(m *types.SignedMessage) {
@@ -637,6 +646,8 @@ func (mp *MessagePool) HeadChange(revert []*types.TipSet, apply []*types.TipSet)
 		}
 	}
 
+	log.Infof("head change func took %s to compute reverts", time.Since(start))
+
 	for _, ts := range apply {
 		for _, b := range ts.Blocks() {
 			bmsgs, smsgs, err := mp.api.MessagesForBlock(b)
@@ -655,6 +666,8 @@ func (mp *MessagePool) HeadChange(revert []*types.TipSet, apply []*types.TipSet)
 		mp.curTs = ts
 	}
 
+	log.Infof("head change func took %s to compute applies", time.Since(start))
+
 	for _, s := range rmsgs {
 		for _, msg := range s {
 			if err := mp.addSkipChecks(msg); err != nil {
@@ -662,6 +675,8 @@ func (mp *MessagePool) HeadChange(revert []*types.TipSet, apply []*types.TipSet)
 			}
 		}
 	}
+
+	log.Infof("head change func took %s to add skip checks", time.Since(start))
 
 	if len(revert) > 0 && futureDebug {
 		msgs, ts := mp.Pending()
