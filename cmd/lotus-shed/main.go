@@ -27,6 +27,7 @@ func main() {
 		commpToCidCmd,
 		fetchParamCmd,
 		proofsCmd,
+		drandCmd,
 	}
 
 	app := &cli.App{
