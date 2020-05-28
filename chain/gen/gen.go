@@ -256,6 +256,10 @@ func (cg *ChainGen) ChainStore() *store.ChainStore {
 	return cg.cs
 }
 
+func (cg *ChainGen) Blockstore() blockstore.Blockstore {
+	return cg.bs
+}
+
 func (cg *ChainGen) Genesis() *types.BlockHeader {
 	return cg.genesis
 }

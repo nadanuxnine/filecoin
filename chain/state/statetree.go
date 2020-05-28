@@ -181,7 +181,10 @@ func (st *StateTree) LookupID(addr address.Address) (address.Address, error) {
 }
 
 // GetActor returns the actor from any type of `addr` provided.
-func (st *StateTree) GetActor(addr address.Address) (*types.Actor, error) {
+func (st *StateTree) GetActor(addr address.Address) (a *types.Actor, err error) {
+	defer func() {
+		fmt.Printf("actor for addr: %s: %p\n", addr, a)
+	}()
 	if addr == address.Undef {
 		return nil, fmt.Errorf("GetActor called on undefined address")
 	}
