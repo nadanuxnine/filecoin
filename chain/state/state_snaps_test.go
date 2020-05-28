@@ -40,3 +40,20 @@ func TestGetActorLayer(t *testing.T) {
 		t.Fatalf("two actor gets inconsistent: a1: %p, a2: %p", a1, a2)
 	}
 }
+
+func TestGetActor(t *testing.T) {
+	a := &types.Actor{Nonce: 1}
+	addr, err := address.NewIDAddress(1)
+	assert.NoError(t, err)
+
+	ss := newStateSnaps()
+	ss.setActor(addr, a)
+
+	a1, err := ss.getActor(addr)
+	assert.NoError(t, err)
+	a2, err := ss.getActor(addr)
+	assert.NoError(t, err)
+	if a1 != a2 {
+		t.Fatalf("two actor gets inconsistent: a1: %p, a2: %p", a1, a2)
+	}
+}
