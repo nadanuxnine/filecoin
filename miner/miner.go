@@ -27,9 +27,17 @@ import (
 
 var log = logging.Logger("miner")
 
-// returns a callback reporting whether we mined a blocks in this round
+// waitFunc is expected to pace block mining at the configured network rate.
+//
+// baseTime is the timestamp of the mining base, i.e. the timestamp
+// of the tipset we're planning to construct upon.
+//
+// Upon each mining loop iteration, the returned callback is called reporting
+// whether we mined a block in this round or not.
 type waitFunc func(ctx context.Context, baseTime uint64) (func(bool), error)
 
+// NewMiner instantiates a miner with a concrete WinningPoStProver and a miner
+// address (which can be different from the worker's address).
 func NewMiner(api api.FullNode, epp gen.WinningPoStProver, addr address.Address) *Miner {
 	arc, err := lru.NewARC(10000)
 	if err != nil {
@@ -41,8 +49,18 @@ func NewMiner(api api.FullNode, epp gen.WinningPoStProver, addr address.Address)
 		epp:     epp,
 		address: addr,
 		waitFunc: func(ctx context.Context, baseTime uint64) (func(bool), error) {
-			// Wait around for half the block time in case other parents come in
+			// wait around for half the block time in case other parents come in
+			//
+			// if we're mining a block in the past via catch-up/rush mining,
+			// such as when recovering from a network halt, this sleep will be
+			// for a negative duration, and therefore **will return
+			// immediately**.
+			//
+			// the result is that we WILL NOT wait, therefore fast-forwarding
+			// and thus healing the chain by backfilling it with null rounds
+			// rapidly.
 			deadline := baseTime + build.PropagationDelay
+
 			time.Sleep(time.Until(time.Unix(int64(deadline), 0)))
 
 			return func(bool) {}, nil
@@ -51,9 +69,11 @@ func NewMiner(api api.FullNode, epp gen.WinningPoStProver, addr address.Address)
 	}
 }
 
+// Miner encapsulates the mining processes of the system.
+//
+// Refer to the godocs on mineOne and mine methods for more detail.
 type Miner struct {
 	api api.FullNode
-
 	epp gen.WinningPoStProver
 
 	lk       sync.Mutex
@@ -63,11 +83,16 @@ type Miner struct {
 
 	waitFunc waitFunc
 
+	// lastWork holds the last MiningBase we built upon.
 	lastWork *MiningBase
 
+	// minedBlockHeights is a safeguard that caches the last heights we mined.
+	// It is consulted before publishing a newly mined block, for a sanity check
+	// intended to avoid slashings in case of a bug.
 	minedBlockHeights *lru.ARCCache
 }
 
+// Address returns the address of the miner.
 func (m *Miner) Address() address.Address {
 	m.lk.Lock()
 	defer m.lk.Unlock()
@@ -75,7 +100,9 @@ func (m *Miner) Address() address.Address {
 	return m.address
 }
 
-func (m *Miner) Start(ctx context.Context) error {
+// Start starts the mining operation. It spawns a goroutine and returns
+// immediately. Start is not idempotent.
+func (m *Miner) Start(_ context.Context) error {
 	m.lk.Lock()
 	defer m.lk.Unlock()
 	if m.stop != nil {
@@ -86,6 +113,8 @@ func (m *Miner) Start(ctx context.Context) error {
 	return nil
 }
 
+// Stop stops the mining operation. It is not idempotent, and multiple adjacent
+// calls to Stop will fail.
 func (m *Miner) Stop(ctx context.Context) error {
 	m.lk.Lock()
 	defer m.lk.Unlock()
@@ -111,6 +140,28 @@ func (m *Miner) niceSleep(d time.Duration) bool {
 	}
 }
 
+// mine runs the mining loop. It performs the following:
+//
+//  1.  Queries our current best currently-known mining candidate (tipset to
+//      build upon).
+//  2.  Waits until the propagation delay of the network has elapsed (currently
+//      6 seconds). The waiting is done relative to the timestamp of the best
+//      candidate, which means that if it's way in the past, we won't wait at
+//      all (e.g. in catch-up or rush mining).
+//  3.  After the wait, we query our best mining candidate. This will be the one
+//      we'll work with.
+//  4.  Sanity check that we _actually_ have a new mining base to mine on. If
+//      not, wait one epoch + propagation delay, and go back to the top.
+//  5.  We attempt to mine a block, by calling mineOne (refer to godocs). This
+//      method will either return a block if we were eligible to mine, or nil
+//      if we weren't.
+//  6a. If we mined a block, we update our state and push it out to the network
+//      via gossipsub.
+//  6b. If we didn't mine a block, we consider this to be a nil round on top of
+//      the mining base we selected. If other miner or miners on the network
+//      were eligible to mine, we will receive their blocks via gossipsub and
+//      we will select that tipset on the next iteration of the loop, thus
+//      discarding our null round.
 func (m *Miner) mine(ctx context.Context) {
 	ctx, span := trace.StartSpan(ctx, "/mine")
 	defer span.End()
@@ -209,11 +260,19 @@ func (m *Miner) mine(ctx context.Context) {
 	}
 }
 
+// MiningBase is the tipset on top of which we plan to construct our next block.
+// Refer to godocs on GetBestMiningCandidate.
 type MiningBase struct {
 	TipSet     *types.TipSet
 	NullRounds abi.ChainEpoch
 }
 
+// GetBestMiningCandidate implements the fork choice rule from a miner's
+// perspective.
+//
+// It obtains the current chain head (HEAD), and compares it to the last tipset
+// we selected as our mining base (LAST). If HEAD's weight is larger than
+// LAST's weight, it selects HEAD to build on. Else, it selects LAST.
 func (m *Miner) GetBestMiningCandidate(ctx context.Context) (*MiningBase, error) {
 	m.lk.Lock()
 	defer m.lk.Unlock()
@@ -246,6 +305,12 @@ func (m *Miner) GetBestMiningCandidate(ctx context.Context) (*MiningBase, error)
 	return m.lastWork, nil
 }
 
+// hasPower checks whether the specified address has enough power to produce a
+// block (usually we check our miner address), as per Storage Power Consensus
+// rules.
+//
+// It does so by querying the Storage Power Actor, and checking if its Quality
+// Adjusted Power is greater or equal to ConsensusMinerMinPower.
 func (m *Miner) hasPower(ctx context.Context, addr address.Address, ts *types.TipSet) (bool, error) {
 	mpower, err := m.api.StateMinerPower(ctx, addr, ts.Key())
 	if err != nil {
