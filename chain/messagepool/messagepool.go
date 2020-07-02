@@ -185,9 +185,14 @@ func New(api Provider, ds dtypes.MetadataDS, netName dtypes.NetworkName) (*Messa
 	cache, _ := lru.New2Q(build.BlsSignatureCacheSize)
 	verifcache, _ := lru.New2Q(build.VerifSigCacheSize)
 
+	repubInterval := time.Duration(build.BlockDelaySecs) * 10 * time.Second
+	if repubInterval == 0 {
+		repubInterval = 10 * time.Second
+	}
+
 	mp := &MessagePool{
 		closer:        make(chan struct{}),
-		repubTk:       time.NewTicker(time.Duration(build.BlockDelaySecs) * 10 * time.Second),
+		repubTk:       time.NewTicker(repubInterval),
 		localAddrs:    make(map[address.Address]struct{}),
 		pending:       make(map[address.Address]*msgSet),
 		minGasPrice:   types.NewInt(0),
