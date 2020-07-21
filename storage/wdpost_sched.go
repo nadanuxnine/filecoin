@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/ipfs/go-cid"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
 
@@ -23,33 +22,6 @@ import (
 
 const StartConfidence = 4 // TODO: config
 
-type WindowPoStEvt struct {
-	State    string
-	Deadline *miner.DeadlineInfo
-	Height   abi.ChainEpoch
-	TipSet   []cid.Cid
-	Error    error `json:",omitempty"`
-
-	Proofs     *WindowPoStEvt_Proofs     `json:",omitempty"`
-	Recoveries *WindowPoStEvt_Recoveries `json:",omitempty"`
-	Faults     *WindowPoStEvt_Faults     `json:",omitempty"`
-}
-
-type WindowPoStEvt_Proofs struct {
-	Partitions []miner.PoStPartition
-	MessageCID cid.Cid `json:",omitempty"`
-}
-
-type WindowPoStEvt_Recoveries struct {
-	Declarations []miner.RecoveryDeclaration
-	MessageCID   cid.Cid `json:",omitempty"`
-}
-
-type WindowPoStEvt_Faults struct {
-	Declarations []miner.FaultDeclaration
-	MessageCID   cid.Cid `json:",omitempty"`
-}
-
 type WindowPoStScheduler struct {
 	api              storageMinerApi
 	prover           storage.Prover
@@ -66,8 +38,8 @@ type WindowPoStScheduler struct {
 	activeDeadline *miner.DeadlineInfo
 	abort          context.CancelFunc
 
-	jrnl      journal.Journal
-	entryType journal.EntryType
+	jrnl       journal.Journal
+	entryTypes [4]journal.EntryType
 
 	// failed abi.ChainEpoch // eps
 	// failLk sync.Mutex
@@ -91,10 +63,16 @@ func NewWindowedPoStScheduler(api storageMinerApi, sb storage.Prover, ft sectors
 		proofType:        rt,
 		partitionSectors: mi.WindowPoStPartitionSectors,
 
-		actor:     actor,
-		worker:    worker,
-		jrnl:      jrnl,
-		entryType: jrnl.RegisterEntryType("storage", "wdpost"),
+		actor:  actor,
+		worker: worker,
+
+		jrnl: jrnl,
+		entryTypes: [...]journal.EntryType{
+			entryTypeWdPoStRun:        jrnl.RegisterEntryType("wdpost", "run"),
+			entryTypeWdPoStProofs:     jrnl.RegisterEntryType("wdpost", "proofs_processed"),
+			entryTypeWdPoStFaults:     jrnl.RegisterEntryType("wdpost", "faults_processed"),
+			entryTypeWdPoStRecoveries: jrnl.RegisterEntryType("wdpost", "recoveries_processed"),
+		},
 	}, nil
 }
 
@@ -247,12 +225,14 @@ func (s *WindowPoStScheduler) abortActivePoSt() {
 	if s.abort != nil {
 		s.abort()
 
-		journal.MaybeRecordEvent(s.jrnl, s.entryType, func() interface{} {
-			return WindowPoStEvt{
-				State:    "abort",
-				Deadline: s.activeDeadline,
-				Height:   s.cur.Height(),
-				TipSet:   s.cur.Cids(),
+		journal.MaybeRecordEvent(s.jrnl, s.entryTypes[entryTypeWdPoStRun], func() interface{} {
+			return WdPoStRunEntry{
+				State: "abort",
+				wdPoStEntryCommon: wdPoStEntryCommon{
+					Deadline: s.activeDeadline,
+					Height:   s.cur.Height(),
+					TipSet:   s.cur.Cids(),
+				},
 			}
 		})
 

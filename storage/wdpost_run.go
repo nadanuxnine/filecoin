@@ -27,13 +27,15 @@ import (
 var errNoPartitions = errors.New("no partitions")
 
 func (s *WindowPoStScheduler) failPost(err error, deadline *miner.DeadlineInfo) {
-	journal.MaybeRecordEvent(s.jrnl, s.entryType, func() interface{} {
-		return WindowPoStEvt{
-			State:    "failed",
-			Deadline: s.activeDeadline,
-			Height:   s.cur.Height(),
-			TipSet:   s.cur.Cids(),
-			Error:    err,
+	journal.MaybeRecordEvent(s.jrnl, s.entryTypes[entryTypeWdPoStRun], func() interface{} {
+		return WdPoStRunEntry{
+			wdPoStEntryCommon: wdPoStEntryCommon{
+				Deadline: s.activeDeadline,
+				Height:   s.cur.Height(),
+				TipSet:   s.cur.Cids(),
+			},
+			State: "failed",
+			Error: err,
 		}
 	})
 
@@ -51,12 +53,14 @@ func (s *WindowPoStScheduler) doPost(ctx context.Context, deadline *miner.Deadli
 	s.abort = abort
 	s.activeDeadline = deadline
 
-	journal.MaybeRecordEvent(s.jrnl, s.entryType, func() interface{} {
-		return WindowPoStEvt{
-			State:    "started",
-			Deadline: s.activeDeadline,
-			Height:   s.cur.Height(),
-			TipSet:   s.cur.Cids(),
+	journal.MaybeRecordEvent(s.jrnl, s.entryTypes[entryTypeWdPoStRun], func() interface{} {
+		return WdPoStRunEntry{
+			wdPoStEntryCommon: wdPoStEntryCommon{
+				Deadline: s.activeDeadline,
+				Height:   s.cur.Height(),
+				TipSet:   s.cur.Cids(),
+			},
+			State: "started",
 		}
 	})
 
@@ -82,12 +86,14 @@ func (s *WindowPoStScheduler) doPost(ctx context.Context, deadline *miner.Deadli
 			return
 		}
 
-		journal.MaybeRecordEvent(s.jrnl, s.entryType, func() interface{} {
-			return WindowPoStEvt{
-				State:    "succeeded",
-				Deadline: s.activeDeadline,
-				Height:   s.cur.Height(),
-				TipSet:   s.cur.Cids(),
+		journal.MaybeRecordEvent(s.jrnl, s.entryTypes[entryTypeWdPoStRun], func() interface{} {
+			return WdPoStRunEntry{
+				wdPoStEntryCommon: wdPoStEntryCommon{
+					Deadline: s.activeDeadline,
+					Height:   s.cur.Height(),
+					TipSet:   s.cur.Cids(),
+				},
+				State: "succeeded",
 			}
 		})
 	}()
@@ -148,21 +154,20 @@ func (s *WindowPoStScheduler) checkNextRecoveries(ctx context.Context, dlIdx uin
 		Recoveries: []miner.RecoveryDeclaration{},
 	}
 
-	defer journal.MaybeRecordEvent(s.jrnl, s.entryType, func() interface{} {
+	defer journal.MaybeRecordEvent(s.jrnl, s.entryTypes[entryTypeWdPoStRecoveries], func() interface{} {
 		var mcid cid.Cid
 		if sm != nil {
 			mcid = sm.Cid()
 		}
 
-		return WindowPoStEvt{
-			State:    "recoveries_processed",
-			Deadline: s.activeDeadline,
-			Height:   s.cur.Height(),
-			TipSet:   s.cur.Cids(),
-			Recoveries: &WindowPoStEvt_Recoveries{
-				Declarations: params.Recoveries,
-				MessageCID:   mcid,
+		return WdPoStRecoveriesEntry{
+			wdPoStEntryCommon: wdPoStEntryCommon{
+				Deadline: s.activeDeadline,
+				Height:   s.cur.Height(),
+				TipSet:   s.cur.Cids(),
 			},
+			Declarations: params.Recoveries,
+			MessageCID:   mcid,
 		}
 	})
 
@@ -258,20 +263,19 @@ func (s *WindowPoStScheduler) checkNextFaults(ctx context.Context, dlIdx uint64,
 		Faults: []miner.FaultDeclaration{},
 	}
 
-	defer journal.MaybeRecordEvent(s.jrnl, s.entryType, func() interface{} {
+	defer journal.MaybeRecordEvent(s.jrnl, s.entryTypes[entryTypeWdPoStFaults], func() interface{} {
 		var mcid cid.Cid
 		if sm != nil {
 			mcid = sm.Cid()
 		}
-		return WindowPoStEvt{
-			State:    "faults_processed",
-			Deadline: s.activeDeadline,
-			Height:   s.cur.Height(),
-			TipSet:   s.cur.Cids(),
-			Faults: &WindowPoStEvt_Faults{
-				Declarations: params.Faults,
-				MessageCID:   mcid,
+		return WdPoStFaultsEntry{
+			wdPoStEntryCommon: wdPoStEntryCommon{
+				Deadline: s.activeDeadline,
+				Height:   s.cur.Height(),
+				TipSet:   s.cur.Cids(),
 			},
+			Declarations: params.Faults,
+			MessageCID:   mcid,
 		}
 	})
 
@@ -521,21 +525,20 @@ func (s *WindowPoStScheduler) submitPost(ctx context.Context, proof *miner.Submi
 
 	var sm *types.SignedMessage
 
-	defer journal.MaybeRecordEvent(s.jrnl, s.entryType, func() interface{} {
+	defer journal.MaybeRecordEvent(s.jrnl, s.entryTypes[entryTypeWdPoStProofs], func() interface{} {
 		var mcid cid.Cid
 		if sm != nil {
 			mcid = sm.Cid()
 		}
 
-		return WindowPoStEvt{
-			State:    "proofs_processed",
-			Deadline: s.activeDeadline,
-			Height:   s.cur.Height(),
-			TipSet:   s.cur.Cids(),
-			Proofs: &WindowPoStEvt_Proofs{
-				Partitions: proof.Partitions,
-				MessageCID: mcid,
+		return WdPoStProofsEntry{
+			wdPoStEntryCommon: wdPoStEntryCommon{
+				Deadline: s.activeDeadline,
+				Height:   s.cur.Height(),
+				TipSet:   s.cur.Cids(),
 			},
+			Partitions: proof.Partitions,
+			MessageCID: mcid,
 		}
 	})
 
