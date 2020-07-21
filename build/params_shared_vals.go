@@ -98,5 +98,5 @@ var DrandConfig = dtypes.DrandConfig{
 		"https://dev1.drand.sh",
 		"https://dev1.drand.sh",
 	},
-	ChainInfoJSON: `{"public_key":"88fdb6f22fcbe671bf91befbf723e159e5934f785168b437c03424cde6361cff5f5d3034390260f210438946f21d867d","period":30,"genesis_time":1589461830,"hash":"e89c9efe5af86ac79fc5d1c0ee0aaa64a81a97bb55d0acc4d2497cc2a0087afe","groupHash":"8f16f0105250b51f34e41fb845d09668b2e3db008dacb3c2d461f0bb2349b854"}`,
+	ChainInfoJSON: `{"public_key": "8cda589f88914aa728fd183f383980b35789ce81b274e5daee1f338b77d02566ef4d3fb0098af1f844f10f9c803c1827","period":25,"genesis_time":1595348225,"hash":"e73b7dc3c4f6a236378220c0dd6aa110eb16eed26c11259606e07ee122838d4f","groupHash":"567d4785122a5a3e75a9bc9911d7ea807dd85ff76b78dc4ff06b075712898607"}`,
 }
