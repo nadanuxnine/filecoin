@@ -55,6 +55,20 @@ var blockValidationCacheKeyPrefix = dstore.NewKey("blockValidation")
 // ReorgNotifee represents a callback that gets called upon reorgs.
 type ReorgNotifee func(rev, app []*types.TipSet) error
 
+// Journal event types.
+const (
+	evtTypeHeadChange = iota
+)
+
+type HeadChangeEvt struct {
+	From        types.TipSetKey
+	FromHeight  abi.ChainEpoch
+	To          types.TipSetKey
+	ToHeight    abi.ChainEpoch
+	RevertCount int
+	ApplyCount  int
+}
+
 // ChainStore is the main point of access to chain data.
 //
 // Raw chain data is stored in the Blockstore, with relevant markers (genesis,
@@ -86,9 +100,12 @@ type ChainStore struct {
 	tsCache *lru.ARCCache
 
 	vmcalls runtime.Syscalls
+
+	journal  journal.Journal
+	evtTypes [1]journal.EventType
 }
 
-func NewChainStore(bs bstore.Blockstore, ds dstore.Batching, vmcalls runtime.Syscalls) *ChainStore {
+func NewChainStore(bs bstore.Blockstore, ds dstore.Batching, vmcalls runtime.Syscalls, jrnl journal.Journal) *ChainStore {
 	c, _ := lru.NewARC(2048)
 	tsc, _ := lru.NewARC(4096)
 	cs := &ChainStore{
@@ -99,6 +116,11 @@ func NewChainStore(bs bstore.Blockstore, ds dstore.Batching, vmcalls runtime.Sys
 		mmCache:  c,
 		tsCache:  tsc,
 		vmcalls:  vmcalls,
+		journal:  jrnl,
+	}
+
+	cs.evtTypes = [...]journal.EventType{
+		evtTypeHeadChange: jrnl.RegisterEventType("sync", "head_change"),
 	}
 
 	ci := NewChainIndex(cs.LoadTipSet)
@@ -327,12 +349,15 @@ func (cs *ChainStore) reorgWorker(ctx context.Context, initialNotifees []ReorgNo
 					continue
 				}
 
-				journal.Add("sync", map[string]interface{}{
-					"op":    "headChange",
-					"from":  r.old.Key(),
-					"to":    r.new.Key(),
-					"rev":   len(revert),
-					"apply": len(apply),
+				journal.MaybeRecordEvent(cs.journal, cs.evtTypes[evtTypeHeadChange], func() interface{} {
+					return HeadChangeEvt{
+						From:        r.old.Key(),
+						FromHeight:  r.old.Height(),
+						To:          r.new.Key(),
+						ToHeight:    r.new.Height(),
+						RevertCount: len(revert),
+						ApplyCount:  len(apply),
+					}
 				})
 
 				// reverse the apply array
