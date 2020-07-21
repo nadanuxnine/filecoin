@@ -154,6 +154,12 @@ func defaults() []Option {
 		Override(new(dtypes.ShutdownChan), make(chan struct{})),
 		Override(new(journal.Journal), journal.OpenFSJournal),
 
+		// By default, disable noisy mpool events; keep only mpool:repub on.
+		Override(new(journal.DisabledEvents), journal.DisabledEvents{
+			journal.EventType{System: "mpool", Event: "add"},
+			journal.EventType{System: "mpool", Event: "remove"},
+		}),
+
 		Override(InitJournalKey, func(j journal.Journal) { /* forces the creation of the journal at startup */ }),
 		// Filecoin modules
 

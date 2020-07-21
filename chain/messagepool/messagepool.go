@@ -28,6 +28,7 @@ import (
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/journal"
 	"github.com/filecoin-project/lotus/lib/sigs"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 
@@ -65,6 +66,26 @@ const (
 	localUpdates = "update"
 )
 
+// Journal event types.
+const (
+	evtTypeMpoolAdd = iota
+	evtTypeMpoolRemove
+	evtTypeMpoolRepub
+)
+
+// MessagePoolEvt is the journal entry for message pool events.
+type MessagePoolEvt struct {
+	Action   string
+	Messages []MessagePoolEvt_Message
+	Error    error `json:",omitempty"`
+}
+
+type MessagePoolEvt_Message struct {
+	types.Message
+
+	CID cid.Cid
+}
+
 type MessagePool struct {
 	lk sync.Mutex
 
@@ -93,6 +114,9 @@ type MessagePool struct {
 	netName dtypes.NetworkName
 
 	sigValCache *lru.TwoQueueCache
+
+	jrnl     journal.Journal
+	evtTypes [3]journal.EventType
 }
 
 type msgSet struct {
@@ -185,7 +209,7 @@ func (mpp *mpoolProvider) LoadTipSet(tsk types.TipSetKey) (*types.TipSet, error)
 	return mpp.sm.ChainStore().LoadTipSet(tsk)
 }
 
-func New(api Provider, ds dtypes.MetadataDS, netName dtypes.NetworkName) (*MessagePool, error) {
+func New(api Provider, ds dtypes.MetadataDS, netName dtypes.NetworkName, jrnl journal.Journal) (*MessagePool, error) {
 	cache, _ := lru.New2Q(build.BlsSignatureCacheSize)
 	verifcache, _ := lru.New2Q(build.VerifSigCacheSize)
 
@@ -202,6 +226,12 @@ func New(api Provider, ds dtypes.MetadataDS, netName dtypes.NetworkName) (*Messa
 		localMsgs:     namespace.Wrap(ds, datastore.NewKey(localMsgsDs)),
 		api:           api,
 		netName:       netName,
+		jrnl:          jrnl,
+		evtTypes: [...]journal.EventType{
+			evtTypeMpoolAdd:    jrnl.RegisterEventType("mpool", "add"),
+			evtTypeMpoolRemove: jrnl.RegisterEventType("mpool", "remove"),
+			evtTypeMpoolRepub:  jrnl.RegisterEventType("mpool", "repub"),
+		},
 	}
 
 	if err := mp.loadLocal(); err != nil {
@@ -284,6 +314,19 @@ func (mp *MessagePool) repubLocal() {
 			if errout != nil {
 				log.Errorf("errors while republishing: %+v", errout)
 			}
+
+			journal.MaybeRecordEvent(mp.jrnl, mp.evtTypes[evtTypeMpoolRepub], func() interface{} {
+				msgs := make([]MessagePoolEvt_Message, 0, len(outputMsgs))
+				for _, m := range outputMsgs {
+					msgs = append(msgs, MessagePoolEvt_Message{Message: m.Message, CID: m.Cid()})
+				}
+				return MessagePoolEvt{
+					Action:   "repub",
+					Messages: msgs,
+					Error:    errout,
+				}
+			})
+
 		case <-mp.closer:
 			mp.repubTk.Stop()
 			return
@@ -448,6 +491,14 @@ func (mp *MessagePool) addLocked(m *types.SignedMessage) error {
 		Type:    api.MpoolAdd,
 		Message: m,
 	}, localUpdates)
+
+	journal.MaybeRecordEvent(mp.jrnl, mp.evtTypes[evtTypeMpoolAdd], func() interface{} {
+		return MessagePoolEvt{
+			Action:   "add",
+			Messages: []MessagePoolEvt_Message{{Message: m.Message, CID: m.Cid()}},
+		}
+	})
+
 	return nil
 }
 
@@ -580,6 +631,12 @@ func (mp *MessagePool) Remove(from address.Address, nonce uint64) {
 			Type:    api.MpoolRemove,
 			Message: m,
 		}, localUpdates)
+
+		journal.MaybeRecordEvent(mp.jrnl, mp.evtTypes[evtTypeMpoolRemove], func() interface{} {
+			return MessagePoolEvt{
+				Action:   "remove",
+				Messages: []MessagePoolEvt_Message{{Message: m.Message, CID: m.Cid()}}}
+		})
 	}
 
 	// NB: This deletes any message with the given nonce. This makes sense
