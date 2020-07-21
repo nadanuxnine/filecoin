@@ -8,10 +8,10 @@ import (
 
 // Journal entry types emitted from this module.
 const (
-	evtTypeDealAccepted = iota
-	evtTypeDealSectorCommitted
-	evtTypeDealExpired
-	evtTypeDealSlashed
+	entryTypeDealAccepted = iota
+	entryTypeDealSectorCommitted
+	entryTypeDealExpired
+	entryTypeDealSlashed
 )
 
 type ClientDealAcceptedEvt struct {

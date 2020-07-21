@@ -9,8 +9,8 @@ func NilJournal() Journal {
 	return nilj
 }
 
-func (n *nilJournal) RegisterEventType(_, _ string) EventType { return EventType{} }
+func (n *nilJournal) RegisterEntryType(_, _ string) EntryType { return EntryType{} }
 
-func (n *nilJournal) RecordEvent(_ EventType, _ interface{}) {}
+func (n *nilJournal) RecordEntry(_ EntryType, _ interface{}) {}
 
 func (n *nilJournal) Close() error { return nil }

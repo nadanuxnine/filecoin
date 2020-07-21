@@ -27,7 +27,7 @@ import (
 var errNoPartitions = errors.New("no partitions")
 
 func (s *WindowPoStScheduler) failPost(err error, deadline *miner.DeadlineInfo) {
-	journal.MaybeRecordEvent(s.jrnl, s.wdPoStEvtType, func() interface{} {
+	journal.MaybeRecordEvent(s.jrnl, s.entryType, func() interface{} {
 		return WindowPoStEvt{
 			State:    "failed",
 			Deadline: s.activeDeadline,
@@ -51,7 +51,7 @@ func (s *WindowPoStScheduler) doPost(ctx context.Context, deadline *miner.Deadli
 	s.abort = abort
 	s.activeDeadline = deadline
 
-	journal.MaybeRecordEvent(s.jrnl, s.wdPoStEvtType, func() interface{} {
+	journal.MaybeRecordEvent(s.jrnl, s.entryType, func() interface{} {
 		return WindowPoStEvt{
 			State:    "started",
 			Deadline: s.activeDeadline,
@@ -82,7 +82,7 @@ func (s *WindowPoStScheduler) doPost(ctx context.Context, deadline *miner.Deadli
 			return
 		}
 
-		journal.MaybeRecordEvent(s.jrnl, s.wdPoStEvtType, func() interface{} {
+		journal.MaybeRecordEvent(s.jrnl, s.entryType, func() interface{} {
 			return WindowPoStEvt{
 				State:    "succeeded",
 				Deadline: s.activeDeadline,
@@ -148,7 +148,7 @@ func (s *WindowPoStScheduler) checkNextRecoveries(ctx context.Context, dlIdx uin
 		Recoveries: []miner.RecoveryDeclaration{},
 	}
 
-	defer journal.MaybeRecordEvent(s.jrnl, s.wdPoStEvtType, func() interface{} {
+	defer journal.MaybeRecordEvent(s.jrnl, s.entryType, func() interface{} {
 		var mcid cid.Cid
 		if sm != nil {
 			mcid = sm.Cid()
@@ -258,7 +258,7 @@ func (s *WindowPoStScheduler) checkNextFaults(ctx context.Context, dlIdx uint64,
 		Faults: []miner.FaultDeclaration{},
 	}
 
-	defer journal.MaybeRecordEvent(s.jrnl, s.wdPoStEvtType, func() interface{} {
+	defer journal.MaybeRecordEvent(s.jrnl, s.entryType, func() interface{} {
 		var mcid cid.Cid
 		if sm != nil {
 			mcid = sm.Cid()
@@ -521,7 +521,7 @@ func (s *WindowPoStScheduler) submitPost(ctx context.Context, proof *miner.Submi
 
 	var sm *types.SignedMessage
 
-	defer journal.MaybeRecordEvent(s.jrnl, s.wdPoStEvtType, func() interface{} {
+	defer journal.MaybeRecordEvent(s.jrnl, s.entryType, func() interface{} {
 		var mcid cid.Cid
 		if sm != nil {
 			mcid = sm.Cid()

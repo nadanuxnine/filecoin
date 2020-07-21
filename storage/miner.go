@@ -45,8 +45,8 @@ type Miner struct {
 	getSealDelay dtypes.GetSealingDelayFunc
 	sealing      *sealing.Sealing
 
-	jrnl           journal.Journal
-	sealingEvtType journal.EventType
+	jrnl             journal.Journal
+	sealingentryType journal.EntryType
 }
 
 // SealingStateEvt is a journal event that records a sector state transition.
@@ -106,8 +106,8 @@ func NewMiner(api storageMinerApi, maddr, worker address.Address, h host.Host, d
 		worker:       worker,
 		getSealDelay: gsd,
 
-		jrnl:           jrnl,
-		sealingEvtType: jrnl.RegisterEventType("storage", "sealing_states"),
+		jrnl:             jrnl,
+		sealingentryType: jrnl.RegisterEntryType("storage", "sealing_states"),
 	}
 
 	return m, nil
@@ -134,7 +134,7 @@ func (m *Miner) Run(ctx context.Context) error {
 }
 
 func (m *Miner) handleSealingNotifications(before, after sealing.SectorInfo) {
-	journal.MaybeRecordEvent(m.jrnl, m.sealingEvtType, func() interface{} {
+	journal.MaybeRecordEvent(m.jrnl, m.sealingentryType, func() interface{} {
 		return SealingStateEvt{
 			SectorNumber: before.SectorNumber,
 			SectorType:   before.SectorType,

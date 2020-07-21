@@ -21,7 +21,7 @@ var log = logging.Logger("journal")
 
 // fsJournal is a basic journal backed by files on a filesystem.
 type fsJournal struct {
-	*eventTypeFactory
+	*entryTypeFactory
 
 	dir       string
 	sizeLimit int64
@@ -37,14 +37,14 @@ type fsJournal struct {
 
 // OpenFSJournal constructs a rolling filesystem journal, with a default
 // per-file size limit of 1GiB.
-func OpenFSJournal(lr repo.LockedRepo, lc fx.Lifecycle, disabled DisabledEvents) (Journal, error) {
+func OpenFSJournal(lr repo.LockedRepo, lc fx.Lifecycle, disabled DisabledEntries) (Journal, error) {
 	dir := filepath.Join(lr.Path(), "journal")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to mk directory %s for file journal: %w", dir, err)
 	}
 
 	f := &fsJournal{
-		eventTypeFactory: newEventTypeFactory(disabled),
+		entryTypeFactory: newEntryTypeFactory(disabled),
 		dir:              dir,
 		sizeLimit:        1 << 30,
 		incoming:         make(chan *Event, 32),
@@ -64,9 +64,9 @@ func OpenFSJournal(lr repo.LockedRepo, lc fx.Lifecycle, disabled DisabledEvents)
 	return f, nil
 }
 
-func (f *fsJournal) RecordEvent(evtType EventType, obj interface{}) {
+func (f *fsJournal) RecordEntry(entryType EntryType, obj interface{}) {
 	je := &Event{
-		EventType: evtType,
+		EntryType: entryType,
 		Timestamp: build.Clock.Now(),
 		Data:      obj,
 	}

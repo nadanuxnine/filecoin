@@ -45,8 +45,8 @@ type ClientNodeAdapter struct {
 	fm *market.FundMgr
 	ev *events.Events
 
-	jrnl     journal.Journal
-	evtTypes [4]journal.EventType
+	jrnl       journal.Journal
+	entryTypes [4]journal.EntryType
 }
 
 type clientApi struct {
@@ -66,10 +66,10 @@ func NewClientNodeAdapter(state full.StateAPI, chain full.ChainAPI, mpool full.M
 		ev: events.NewEvents(context.TODO(), &clientApi{chain, state}),
 
 		jrnl: jrnl,
-		evtTypes: [...]journal.EventType{
-			evtTypeDealSectorCommitted: jrnl.RegisterEventType("markets:storage:client", "deal_sector_committed"),
-			evtTypeDealExpired:         jrnl.RegisterEventType("markets:storage:client", "deal_expired"),
-			evtTypeDealSlashed:         jrnl.RegisterEventType("markets:storage:client", "deal_slashed"),
+		entryTypes: [...]journal.EntryType{
+			entryTypeDealSectorCommitted: jrnl.RegisterEntryType("markets:storage:client", "deal_sector_committed"),
+			entryTypeDealExpired:         jrnl.RegisterEntryType("markets:storage:client", "deal_expired"),
+			entryTypeDealSlashed:         jrnl.RegisterEntryType("markets:storage:client", "deal_slashed"),
 		},
 	}
 }
@@ -247,7 +247,7 @@ func (c *ClientNodeAdapter) ValidatePublishedDeal(ctx context.Context, deal stor
 	}
 
 	dealID := res.IDs[dealIdx]
-	journal.MaybeRecordEvent(c.jrnl, c.evtTypes[evtTypeDealAccepted], func() interface{} {
+	journal.MaybeRecordEvent(c.jrnl, c.entryTypes[entryTypeDealAccepted], func() interface{} {
 		deal := deal // copy and strip fields we don't want to log to the journal
 		deal.ClientSignature = crypto.Signature{}
 		return ClientDealAcceptedEvt{ID: dealID, Deal: deal, Height: c.cs.GetHeaviestTipSet().Height()}
@@ -296,7 +296,7 @@ func (c *ClientNodeAdapter) OnDealSectorCommitted(ctx context.Context, provider 
 
 		log.Infof("Storage deal %d activated at epoch %d", dealId, sd.State.SectorStartEpoch)
 
-		journal.MaybeRecordEvent(c.jrnl, c.evtTypes[evtTypeDealSectorCommitted], func() interface{} {
+		journal.MaybeRecordEvent(c.jrnl, c.entryTypes[entryTypeDealSectorCommitted], func() interface{} {
 			return ClientDealSectorCommittedEvt{ID: dealId, State: sd.State, Height: curH}
 		})
 

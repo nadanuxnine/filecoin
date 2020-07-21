@@ -57,7 +57,7 @@ type ReorgNotifee func(rev, app []*types.TipSet) error
 
 // Journal event types.
 const (
-	evtTypeHeadChange = iota
+	entryTypeHeadChange = iota
 )
 
 type HeadChangeEvt struct {
@@ -101,8 +101,8 @@ type ChainStore struct {
 
 	vmcalls runtime.Syscalls
 
-	journal  journal.Journal
-	evtTypes [1]journal.EventType
+	journal    journal.Journal
+	entryTypes [1]journal.EntryType
 }
 
 func NewChainStore(bs bstore.Blockstore, ds dstore.Batching, vmcalls runtime.Syscalls, jrnl journal.Journal) *ChainStore {
@@ -119,8 +119,8 @@ func NewChainStore(bs bstore.Blockstore, ds dstore.Batching, vmcalls runtime.Sys
 		journal:  jrnl,
 	}
 
-	cs.evtTypes = [...]journal.EventType{
-		evtTypeHeadChange: jrnl.RegisterEventType("sync", "head_change"),
+	cs.entryTypes = [...]journal.EntryType{
+		entryTypeHeadChange: jrnl.RegisterEntryType("sync", "head_change"),
 	}
 
 	ci := NewChainIndex(cs.LoadTipSet)
@@ -349,7 +349,7 @@ func (cs *ChainStore) reorgWorker(ctx context.Context, initialNotifees []ReorgNo
 					continue
 				}
 
-				journal.MaybeRecordEvent(cs.journal, cs.evtTypes[evtTypeHeadChange], func() interface{} {
+				journal.MaybeRecordEvent(cs.journal, cs.entryTypes[entryTypeHeadChange], func() interface{} {
 					return HeadChangeEvt{
 						From:        r.old.Key(),
 						FromHeight:  r.old.Height(),

@@ -68,9 +68,9 @@ const (
 
 // Journal event types.
 const (
-	evtTypeMpoolAdd = iota
-	evtTypeMpoolRemove
-	evtTypeMpoolRepub
+	entryTypeMpoolAdd = iota
+	entryTypeMpoolRemove
+	entryTypeMpoolRepub
 )
 
 // MessagePoolEvt is the journal entry for message pool events.
@@ -115,8 +115,8 @@ type MessagePool struct {
 
 	sigValCache *lru.TwoQueueCache
 
-	jrnl     journal.Journal
-	evtTypes [3]journal.EventType
+	jrnl       journal.Journal
+	entryTypes [3]journal.EntryType
 }
 
 type msgSet struct {
@@ -227,10 +227,10 @@ func New(api Provider, ds dtypes.MetadataDS, netName dtypes.NetworkName, jrnl jo
 		api:           api,
 		netName:       netName,
 		jrnl:          jrnl,
-		evtTypes: [...]journal.EventType{
-			evtTypeMpoolAdd:    jrnl.RegisterEventType("mpool", "add"),
-			evtTypeMpoolRemove: jrnl.RegisterEventType("mpool", "remove"),
-			evtTypeMpoolRepub:  jrnl.RegisterEventType("mpool", "repub"),
+		entryTypes: [...]journal.EntryType{
+			entryTypeMpoolAdd:    jrnl.RegisterEntryType("mpool", "add"),
+			entryTypeMpoolRemove: jrnl.RegisterEntryType("mpool", "remove"),
+			entryTypeMpoolRepub:  jrnl.RegisterEntryType("mpool", "repub"),
 		},
 	}
 
@@ -315,7 +315,7 @@ func (mp *MessagePool) repubLocal() {
 				log.Errorf("errors while republishing: %+v", errout)
 			}
 
-			journal.MaybeRecordEvent(mp.jrnl, mp.evtTypes[evtTypeMpoolRepub], func() interface{} {
+			journal.MaybeRecordEvent(mp.jrnl, mp.entryTypes[entryTypeMpoolRepub], func() interface{} {
 				msgs := make([]MessagePoolEvt_Message, 0, len(outputMsgs))
 				for _, m := range outputMsgs {
 					msgs = append(msgs, MessagePoolEvt_Message{Message: m.Message, CID: m.Cid()})
@@ -492,7 +492,7 @@ func (mp *MessagePool) addLocked(m *types.SignedMessage) error {
 		Message: m,
 	}, localUpdates)
 
-	journal.MaybeRecordEvent(mp.jrnl, mp.evtTypes[evtTypeMpoolAdd], func() interface{} {
+	journal.MaybeRecordEvent(mp.jrnl, mp.entryTypes[entryTypeMpoolAdd], func() interface{} {
 		return MessagePoolEvt{
 			Action:   "add",
 			Messages: []MessagePoolEvt_Message{{Message: m.Message, CID: m.Cid()}},
@@ -632,7 +632,7 @@ func (mp *MessagePool) Remove(from address.Address, nonce uint64) {
 			Message: m,
 		}, localUpdates)
 
-		journal.MaybeRecordEvent(mp.jrnl, mp.evtTypes[evtTypeMpoolRemove], func() interface{} {
+		journal.MaybeRecordEvent(mp.jrnl, mp.entryTypes[entryTypeMpoolRemove], func() interface{} {
 			return MessagePoolEvt{
 				Action:   "remove",
 				Messages: []MessagePoolEvt_Message{{Message: m.Message, CID: m.Cid()}}}

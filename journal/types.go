@@ -5,19 +5,19 @@ import (
 	"time"
 )
 
-// DisabledEvents is the set of event types whose journaling is suppressed.
-type DisabledEvents []EventType
+// DisabledEntries is the set of event types whose journaling is suppressed.
+type DisabledEntries []EntryType
 
-// EventType represents the signature of an event.
-type EventType struct {
+// EntryType represents the signature of an event.
+type EntryType struct {
 	System string
 	Event  string
 
 	// enabled stores whether this event type is enabled.
 	enabled bool
 
-	// safe is a sentinel marker that's set to true if this EventType was
-	// constructed correctly (via Journal#RegisterEventType).
+	// safe is a sentinel marker that's set to true if this EntryType was
+	// constructed correctly (via Journal#RegisterEntryType).
 	safe bool
 }
 
@@ -28,7 +28,7 @@ type EventType struct {
 //
 // All event types are enabled by default, and specific event types can only
 // be disabled at Journal construction time.
-func (et EventType) Enabled() bool {
+func (et EntryType) Enabled() bool {
 	return et.enabled
 }
 
@@ -41,15 +41,16 @@ func (et EventType) Enabled() bool {
 // For cleanliness and type safety, we recommend to use typed events. See the
 // *Evt struct types in this package for more info.
 type Journal interface {
-	// RegisterEventType introduces a new event type to this journal, and
-	// returns an EventType token that components can later use to check whether
+	// RegisterEntryType introduces a new entry type to this journal, and
+	// returns an EntryType token that components can later use to check whether
 	// journalling for that type is enabled/suppressed, and to tag journal
 	// entries appropriately.
-	RegisterEventType(system, event string) EventType
+	RegisterEntryType(system, event string) EntryType
 
-	// RecordEvent records this event to the journal. See godocs on the Journal type
-	// for more info.
-	RecordEvent(evtType EventType, data interface{})
+	// RecordEntry records this entry to the journal.
+	//
+	// See godocs on the Journal type for more info.
+	RecordEntry(entryType EntryType, data interface{})
 
 	// Close closes this journal for further writing.
 	Close() error
@@ -59,23 +60,23 @@ type Journal interface {
 //
 // See godocs on Journal for more information.
 type Event struct {
-	EventType
+	EntryType
 
 	Timestamp time.Time
 	Data      interface{}
 }
 
-// eventTypeFactory is an embeddable mixin that takes care of tracking disabled
+// entryTypeFactory is an embeddable mixin that takes care of tracking disabled
 // event types, and returning initialized/safe EventTypes when requested.
-type eventTypeFactory struct {
+type entryTypeFactory struct {
 	sync.Mutex
 
-	m map[string]EventType
+	m map[string]EntryType
 }
 
-func newEventTypeFactory(disabled DisabledEvents) *eventTypeFactory {
-	ret := &eventTypeFactory{
-		m: make(map[string]EventType, len(disabled)+32), // + extra capacity.
+func newEntryTypeFactory(disabled DisabledEntries) *entryTypeFactory {
+	ret := &entryTypeFactory{
+		m: make(map[string]EntryType, len(disabled)+32), // + extra capacity.
 	}
 
 	for _, et := range disabled {
@@ -86,7 +87,7 @@ func newEventTypeFactory(disabled DisabledEvents) *eventTypeFactory {
 	return ret
 }
 
-func (d *eventTypeFactory) RegisterEventType(system, event string) EventType {
+func (d *entryTypeFactory) RegisterEntryType(system, event string) EntryType {
 	d.Lock()
 	defer d.Unlock()
 
@@ -95,7 +96,7 @@ func (d *eventTypeFactory) RegisterEventType(system, event string) EventType {
 		return et
 	}
 
-	et := EventType{
+	et := EntryType{
 		System:  system,
 		Event:   event,
 		enabled: true,
