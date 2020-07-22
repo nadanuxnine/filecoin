@@ -834,7 +834,7 @@ var clientGetDealCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Println(b)
+		fmt.Println(string(b))
 		return nil
 	},
 }
