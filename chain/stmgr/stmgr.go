@@ -219,6 +219,8 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, pstate cid.Cid, bms []B
 		if ret.ExitCode != 0 {
 			return cid.Undef, cid.Undef, xerrors.Errorf("reward application message failed (exit %d): %s", ret.ExitCode, ret.ActorErr)
 		}
+		log.Infof("FRRIST | ApplyBlocks StateRoot: %s, Epoch: %d, Miner: %s, Penalty: %s, GasReward: %s, WinCount: %d, Ret.Exitcode: %s",
+			pstate.String(), epoch, b.Miner.String(), penalty.String(), gasReward.String(), b.WinCount, ret.ExitCode.String())
 
 	}
 
