@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/specs-actors/actors/abi"
 	"github.com/filecoin-project/specs-actors/actors/abi/big"
 	"io"
 	"log"
@@ -19,6 +18,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer f.Close()
+
+	out, err := os.Create("out.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer out.Close()
 
 	r := csv.NewReader(f)
 
@@ -49,7 +55,7 @@ func main() {
 			log.Fatal(err)
 		}
 
-		rwdPayable, err := types.ParseFIL(record[5])
+		rwdPayable, err := big.FromString(record[5])
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -59,26 +65,30 @@ func main() {
 		prevRwd, ok := minerRewards[miner]
 		if !ok {
 			minerRewards[miner] = curRwd
-			continue
+			prevRwd = big.Zero()
 		}
 		minerRewards[miner] = big.Add(prevRwd, curRwd)
-	}
-
-	fmt.Println("As of Height ",epoch)
-	var ranks []minerRank
-	for m, r := range minerRewards {
-		ranks = append(ranks, minerRank{
-			miner: m,
-			rwd:   r,
+		if _,err := fmt.Fprintln(out,"As of Height ",epoch); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Fprintln(out, "Miner ", miner.String(), " Reward ", curRwd.String())
+		var ranks []minerRank
+		for m, r := range minerRewards {
+			ranks = append(ranks, minerRank{
+				miner: m,
+				rwd:   r,
+			})
+		}
+		sort.Slice(ranks, func(i, j int) bool {
+			return ranks[i].rwd.GreaterThan(ranks[j].rwd)
 		})
-	}
-	sort.Slice(ranks, func(i, j int) bool {
-		return ranks[i].rwd.GreaterThan(ranks[j].rwd)
-	})
 
-	for rnk, mr := range ranks {
-		fmt.Println("Rank ", rnk+1, " Miner ", mr.miner.String(), " Reward ", big.Div(mr.rwd, abi.TokenPrecision).String())
+		for rnk, mr := range ranks {
+			fmt.Fprintln(out,"Rank ", rnk+1, " Miner ", mr.miner.String(), " Total Reward ", mr.rwd.String())
+		}
+		fmt.Fprintln(out)
 	}
+
 }
 
 type minerRank struct {
