@@ -19,7 +19,6 @@ import (
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/lib/parmap"
 )
 
 var log = logging.Logger("processor")
@@ -45,6 +44,8 @@ type actorInfo struct {
 
 	tsKey       types.TipSetKey
 	parentTsKey types.TipSetKey
+
+	nullRounds []types.TipSetKey
 
 	addr  address.Address
 	state string
@@ -119,7 +120,7 @@ func (p *Processor) Start(ctx context.Context) {
 				// TODO special case genesis state handling here to avoid all the special cases that will be needed for it else where
 				// before doing "normal" processing.
 
-				actorChanges, err := p.collectActorChanges(ctx, toProcess)
+				actorChanges, nullRounds, err := p.collectActorChanges(ctx, toProcess)
 				if err != nil {
 					log.Fatalw("Failed to collect actor changes", "error", err)
 				}
@@ -141,7 +142,7 @@ func (p *Processor) Start(ctx context.Context) {
 				})
 
 				grp.Go(func() error {
-					if err := p.HandleRewardChanges(ctx, actorChanges[builtin.RewardActorCodeID]); err != nil {
+					if err := p.HandleRewardChanges(ctx, actorChanges[builtin.RewardActorCodeID], nullRounds); err != nil {
 						return xerrors.Errorf("Failed to handle reward changes: %w", err)
 					}
 					return nil
@@ -191,7 +192,7 @@ func (p *Processor) refreshViews() error {
 	return nil
 }
 
-func (p *Processor) collectActorChanges(ctx context.Context, toProcess map[cid.Cid]*types.BlockHeader) (map[cid.Cid]ActorTips, error) {
+func (p *Processor) collectActorChanges(ctx context.Context, toProcess map[cid.Cid]*types.BlockHeader) (map[cid.Cid]ActorTips, []types.TipSetKey, error) {
 	start := time.Now()
 	defer func() {
 		log.Debugw("Collected Actor Changes", "duration", time.Since(start).String())
@@ -200,13 +201,16 @@ func (p *Processor) collectActorChanges(ctx context.Context, toProcess map[cid.C
 	out := map[cid.Cid]ActorTips{}
 	var outMu sync.Mutex
 
+	var nulRounds []types.TipSetKey
+
 	// map of addresses to changed actors
 	var changes map[string]types.Actor
 	actorsSeen := map[cid.Cid]struct{}{}
 
 	// collect all actor state that has changes between block headers
 	paDone := 0
-	parmap.Par(50, parmap.MapArr(toProcess), func(bh *types.BlockHeader) {
+	for _, bh := range toProcess {
+	//parmap.Par(50, parmap.MapArr(toProcess), func(bh *types.BlockHeader) {
 		paDone++
 		if paDone%100 == 0 {
 			log.Debugw("Collecting actor changes", "done", paDone, "percent", (paDone*100)/len(toProcess))
@@ -217,6 +221,14 @@ func (p *Processor) collectActorChanges(ctx context.Context, toProcess map[cid.C
 			panic(err)
 		}
 
+		// NB: len(changes) == 0 when there is a null block (e.g. height 1 on calibration net causes nothing to be recorded for height 2)
+		// special case null rounds
+		if pts.ParentState().Equals(bh.ParentStateRoot) {
+			outMu.Lock()
+			nulRounds = append(nulRounds, pts.Key())
+			outMu.Unlock()
+		}
+
 		// collect all actors that had state changes between the blockheader parent-state and its grandparent-state.
 		// TODO: changes will contain deleted actors, this causes needless processing further down the pipeline, consider
 		// a separate strategy for deleted actors
@@ -224,6 +236,7 @@ func (p *Processor) collectActorChanges(ctx context.Context, toProcess map[cid.C
 		if err != nil {
 			panic(err)
 		}
+
 
 		// record the state of all actors that have changed
 		for a, act := range changes {
@@ -266,8 +279,8 @@ func (p *Processor) collectActorChanges(ctx context.Context, toProcess map[cid.C
 			actorsSeen[act.Head] = struct{}{}
 			outMu.Unlock()
 		}
-	})
-	return out, nil
+	}
+	return out, nulRounds, nil
 }
 
 func (p *Processor) unprocessedBlocks(ctx context.Context, batch int) (map[cid.Cid]*types.BlockHeader, error) {

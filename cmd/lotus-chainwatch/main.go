@@ -29,12 +29,12 @@ func main() {
 			&cli.StringFlag{
 				Name:    "db",
 				EnvVars: []string{"LOTUS_DB"},
-				Value:   "",
+				Value:   "postgres://postgres:password@192.168.168.10:5432/postgres?sslmode=disable",
 			},
 			&cli.StringFlag{
 				Name:    "log-level",
 				EnvVars: []string{"GOLOG_LOG_LEVEL"},
-				Value:   "info",
+				Value:   "debug",
 			},
 		},
 		Commands: []*cli.Command{
