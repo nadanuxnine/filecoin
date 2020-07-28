@@ -107,6 +107,7 @@ const (
 	HandleIncomingMessagesKey
 
 	RegisterClientValidatorKey
+	HandlePaymentChannelManagerKey
 
 	// miner
 	GetParamsKey
@@ -272,6 +273,7 @@ func Online() Option {
 
 			Override(new(*paychmgr.Store), paychmgr.NewStore),
 			Override(new(*paychmgr.Manager), paychmgr.NewManager),
+			Override(HandlePaymentChannelManagerKey, paychmgr.HandleManager),
 			Override(new(*market.FundMgr), market.NewFundMgr),
 			Override(SettlePaymentChannelsKey, settler.SettlePaymentChannels),
 		),
