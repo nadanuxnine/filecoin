@@ -126,20 +126,23 @@ func LoadGenesis(genBytes []byte) func(dtypes.ChainBlockstore) Genesis {
 func DoSetGenesis(_ dtypes.AfterGenesisSet) {}
 
 func SetGenesis(cs *store.ChainStore, g Genesis) (dtypes.AfterGenesisSet, error) {
-	_, err := cs.GetGenesis()
-	if err == nil {
-		return dtypes.AfterGenesisSet{}, nil // already set, noop
-	}
-	if err != datastore.ErrNotFound {
-		return dtypes.AfterGenesisSet{}, xerrors.Errorf("getting genesis block failed: %w", err)
-	}
-
-	genesis, err := g()
+	expectedGenesis, err := g()
 	if err != nil {
 		return dtypes.AfterGenesisSet{}, xerrors.Errorf("genesis func failed: %w", err)
 	}
 
-	return dtypes.AfterGenesisSet{}, cs.SetGenesis(genesis)
+	genesisFromRepo, err := cs.GetGenesis()
+	if err == nil {
+		if genesisFromRepo.Cid() != expectedGenesis.Cid() {
+			return dtypes.AfterGenesisSet{}, xerrors.Errorf("genesis in the repo is not the one expected by this version of Lotus! Consider deleting your Lotus repo.")
+		}
+		return dtypes.AfterGenesisSet{}, nil // already set, noop
+	}
+	if err != datastore.ErrNotFound {
+		return dtypes.AfterGenesisSet{}, xerrors.Errorf("getting genesis block from the repo failed! Consider deleting your Lotus repo.: %w", err)
+	}
+
+	return dtypes.AfterGenesisSet{}, cs.SetGenesis(expectedGenesis)
 }
 
 func NetworkName(mctx helpers.MetricsCtx, lc fx.Lifecycle, cs *store.ChainStore, _ dtypes.AfterGenesisSet) (dtypes.NetworkName, error) {
