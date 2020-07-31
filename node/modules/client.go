@@ -2,8 +2,9 @@ package modules
 
 import (
 	"context"
-	"github.com/filecoin-project/go-fil-markets/storagemarket/impl/funds"
 	"time"
+
+	"github.com/filecoin-project/go-fil-markets/storagemarket/impl/funds"
 
 	"github.com/filecoin-project/go-multistore"
 	"golang.org/x/xerrors"
@@ -35,6 +36,7 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/repo"
 	"github.com/filecoin-project/lotus/node/repo/importmgr"
+	"github.com/filecoin-project/lotus/node/repo/retrievalstoremgr"
 	"github.com/filecoin-project/lotus/paychmgr"
 )
 
@@ -155,4 +157,14 @@ func RetrievalClient(lc fx.Lifecycle, h host.Host, mds dtypes.ClientMultiDstore,
 		},
 	})
 	return client, nil
+}
+
+// ClientRetrievalStoreManager is the default version of the RetrievalStoreManager that runs on multistore
+func ClientRetrievalStoreManager(imgr dtypes.ClientImportMgr) dtypes.ClientRetrievalStoreManager {
+	return retrievalstoremgr.NewMultiStoreRetrievalStoreManager(imgr)
+}
+
+// ClientBlockstoreRetrievalStoreManager is the default version of the RetrievalStoreManager that runs on multistore
+func ClientBlockstoreRetrievalStoreManager(bs dtypes.ClientBlockstore) dtypes.ClientRetrievalStoreManager {
+	return retrievalstoremgr.NewBlockstoreRetrievalStoreManager(bs)
 }
