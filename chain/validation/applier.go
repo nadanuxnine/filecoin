@@ -2,6 +2,7 @@ package validation
 
 import (
 	"context"
+	"github.com/filecoin-project/go-address"
 
 	"golang.org/x/xerrors"
 
@@ -97,6 +98,7 @@ func (a *Applier) ApplyTipSetMessages(epoch abi.ChainEpoch, blocks []vtypes.Bloc
 			rval = []byte{} // chain validation tests expect empty arrays to not be nil...
 		}
 		receipts = append(receipts, vtypes.MessageReceipt{
+			Msg:         fromLotusMsg(msg),
 			ExitCode:    ret.ExitCode,
 			ReturnValue: rval,
 
@@ -160,6 +162,7 @@ func (a *Applier) applyMessage(epoch abi.ChainEpoch, lm types.ChainMsg) (vtypes.
 	}
 
 	mr := vtypes.MessageReceipt{
+		Msg:         fromLotusMsg(lm.VMMessage()),
 		ExitCode:    ret.ExitCode,
 		ReturnValue: rval,
 		GasUsed:     vtypes.GasUnits(ret.GasUsed),
@@ -168,16 +171,41 @@ func (a *Applier) applyMessage(epoch abi.ChainEpoch, lm types.ChainMsg) (vtypes.
 	return mr, ret.Penalty, abi.NewTokenAmount(ret.GasUsed), nil
 }
 
+func fromLotusMsg(msg *types.Message) vtypes.Message {
+	return vtypes.Message{
+		To:   msg.To.String(),
+		From: msg.From.String(),
+
+		CallSeqNum: msg.Nonce,
+		Method:     msg.Method,
+
+		Value:    msg.Value.Int.Int64(),
+		GasPrice: msg.GasPrice.Int.Int64(),
+		GasLimit: msg.GasLimit,
+
+		Params: msg.Params,
+	}
+}
+
 func toLotusMsg(msg *vtypes.Message) *types.Message {
+	to, err := address.NewFromString(msg.To)
+	if err != nil {
+		panic("couldn't decode to address")
+	}
+
+	from, err := address.NewFromString(msg.From)
+	if err != nil {
+		panic("couldn't decode from address")
+	}
 	return &types.Message{
-		To:   msg.To,
-		From: msg.From,
+		To:   to,
+		From: from,
 
 		Nonce:  msg.CallSeqNum,
 		Method: msg.Method,
 
-		Value:    types.BigInt{Int: msg.Value.Int},
-		GasPrice: types.BigInt{Int: msg.GasPrice.Int},
+		Value:    types.NewInt(uint64(msg.Value)),
+		GasPrice: types.NewInt(uint64(msg.GasPrice)),
 		GasLimit: msg.GasLimit,
 
 		Params: msg.Params,

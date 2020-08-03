@@ -35,5 +35,6 @@ func (f *Factories) NewValidationConfig() vstate.ValidationConfig {
 	checkExit := true
 	checkRet := true
 	checkState := true
-	return NewConfig(trackGas, checkExit, checkRet, checkState)
+	checkBals := true
+	return NewConfig(trackGas, checkExit, checkRet, checkState, checkBals)
 }

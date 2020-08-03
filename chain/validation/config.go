@@ -9,14 +9,16 @@ type Config struct {
 	checkExitCode    bool
 	checkReturnValue bool
 	checkState       bool
+	checkBals        bool
 }
 
-func NewConfig(gas, exit, ret, state bool) *Config {
+func NewConfig(gas, exit, ret, state, bals bool) *Config {
 	return &Config{
 		trackGas:         gas,
 		checkExitCode:    exit,
 		checkReturnValue: ret,
 		checkState:       state,
+		checkBals:        bals,
 	}
 }
 
@@ -34,4 +36,8 @@ func (v Config) ValidateReturnValue() bool {
 
 func (v Config) ValidateStateRoot() bool {
 	return v.checkState
+}
+
+func (v Config) ValidateBalances() bool {
+	return v.checkBals
 }
